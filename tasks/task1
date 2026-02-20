@@ -1,0 +1,43 @@
+  ★ Insight ─────────────────────────────────────
+  Jumping to endpoints before understanding your domain is like writing function signatures before knowing what problem you're solving. The API is the interface to your system - but
+  you need to know what the system is first.
+  ─────────────────────────────────────────────────
+  ---
+  The Canonical Order (Google/Amazon Style)
+  1. REQUIREMENTS     →  What problem? For whom? What constraints?
+  2. DOMAIN MODEL     →  What are the core "nouns"? How do they relate?
+  3. DATA MODEL       →  How is it stored? What are the access patterns?
+  4. API DESIGN       →  How do clients interact with the system?
+  5. IMPLEMENTATION   →  Code.
+  You're at Step 1. You cannot do Step 4 yet.
+  ---
+  Your Real First Task: The One-Pager
+  Create a file called docs/REQUIREMENTS.md. Answer these questions in plain English - no code, no YAML, no diagrams yet:
+
+  Functional Requirements
+
+  - What is a "Reflection"? What data does it contain?
+  - Who creates Reflections? Is there a user/account system?
+  - Who can read a Reflection? Only the author? Anyone with a link?
+  - Can Reflections be edited? Deleted?
+  - Is there a concept of "days"? Can you submit multiple per day?
+
+  Non-Functional Requirements (already in CLAUDE.md, but restate them)
+
+  - Latency target?
+  - Availability target?
+  - What does "encrypted" mean? Encrypted by whom, with what key, stored where?
+
+  Threat Model
+
+  - Who is the adversary? A curious DBA? A compromised server? A nation-state?
+  - If your database leaks, what can the attacker read?
+
+  ---
+  📖 Canon: Before you write this, read Chapter 1 of Designing Data-Intensive Applications (DDIA) - specifically the section on "Thinking About Data Systems." It frames exactly this:
+  you're not building an API, you're building a data system with specific reliability, scalability, and maintainability requirements.
+
+  ---
+  Come back with your REQUIREMENTS.md. Then we'll derive the domain model together, and the API will become obvious.
+
+  What's your answer to the most fundamental question: What is a Reflection, and who owns the encryption key?
