@@ -1,0 +1,9 @@
+Quest 2: The Contract.
+
+Your exact deliverables are:
+
+Rewrite docs/REQUIREMENTS.md: Strip out all the vanity features you added earlier. Document the absolute minimum functional requirements for a single-tenant system and the strict SRE constraints. Explicitly state the use of Envelope Encryption and Metadata Separation.
+
+Create docs/DOMAIN.md: Define the exact JSON request payload that the client will send to POST /days/{date}/reflections, and the exact JSON response payload the server will return.
+
+The CTO Constraint: Your JSON design must perfectly reflect the Envelope Encryption architecture. I need to see exactly how you structure the data over the wire (what the client sends) versus what you conceptualize for the database.
