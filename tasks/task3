@@ -1,0 +1,25 @@
+Quest 3: The Scaffolding
+
+You are stepping out of Python/Localhost scripts and into a compiled, strongly-typed systems language. Respect the directory structure.
+
+Your Orders:
+
+Open your terminal in the Sanctum directory.
+
+Run go mod init github.com/{your_github_username}/sanctum (Replace with your actual username).
+
+Create the directory tree: mkdir -p cmd/server
+
+Create the entry point: touch cmd/server/main.go
+
+Write the server using only the standard library (net/http).
+
+Listen on port 8080.
+
+Create a single route: GET /health that returns {"status": "Sanctum is alive"} with an HTTP 200 OK.
+
+No frameworks. If I see import "github.com/gin-gonic/gin", I will reject the PR. You need to feel how HTTP works at the raw socket and multiplexer level before you earn the right to use abstractions.
+
+Write the code. Run go run cmd/server/main.go. Test it with curl http://localhost:8080/health.
+
+Show me the contents of main.go when it is breathing.
