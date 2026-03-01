@@ -36,7 +36,7 @@ func NewEngine(key []byte) (*Engine, error) {
 
 // Seal encrypts plaintext using envelope encryption.
 // Returns: ciphertext (encrypted data), encryptedDEK (wrapped key), nonce, error.
-func (e *Engine) Seal(plaintext []byte) (ciphertext, encryptedDEK, nonce []byte, err error) {
+func (engine *Engine) Seal(plaintext []byte) (ciphertext, encryptedDEK, nonce []byte, err error) {
 	// Generate random Data Encryption Key
 	dek := make([]byte, KeySize)
 	if _, err := io.ReadFull(rand.Reader, dek); err != nil {
@@ -51,31 +51,51 @@ func (e *Engine) Seal(plaintext []byte) (ciphertext, encryptedDEK, nonce []byte,
 	}
 
 	// Encrypt plaintext with DEK
-	dataGCM, err := newGCM(dek)
+	dekCipher, err := newGCM(dek)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ciphertext = dataGCM.Seal(nil, nonce, plaintext, nil)
+	ciphertext = dekCipher.Seal(nil, nonce, plaintext, nil)
 
 	// Wrap DEK with master key
-	masterGCM, err := newGCM(e.masterKey)
+	kekCipher, err := newGCM(engine.masterKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	encryptedDEK = masterGCM.Seal(nil, nonce, dek, nil)
+	encryptedDEK = kekCipher.Seal(nil, nonce, dek, nil)
 
 	return ciphertext, encryptedDEK, nonce, nil
 }
 
 // Open decrypts ciphertext using envelope encryption.
 // Unwraps the DEK using the master key, then decrypts the ciphertext.
-func (e *Engine) Open(ciphertext, encryptedDEK, nonce []byte) (plaintext []byte, err error) {
-	// TODO(human): Implement decryption
-	// 1. Unwrap DEK: decrypt encryptedDEK with masterKey using newGCM + Open
-	// 2. Decrypt: use DEK to decrypt ciphertext
-	// 3. Zero the DEK from memory with defer zeroBytes(dek)
-	// 4. Return plaintext
-	return nil, errors.New("not implemented")
+func (engine *Engine) Open(ciphertext, encryptedDEK, nonce []byte) (plaintext []byte, err error) {
+
+	kekCipher, err := newGCM(engine.masterKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt DEK using the master key
+	dek, err := kekCipher.Open(nil, nonce, encryptedDEK, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer zeroBytes(dek) // Wipe dek from memory when done
+
+	dekCipher, err := newGCM(dek)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt ciphertext with DEK
+	plaintext, err = dekCipher.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return plaintext, nil
 }
 
 // newGCM creates an AES-GCM cipher from the provided key.

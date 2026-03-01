@@ -85,3 +85,9 @@ If revisited, implement envelope format:
 ```
 
 ---
+
+## TD-003: Engine.go is tight coupled with GCM
+
+**Status:** Accepted
+**Date:** 2026-03-01
+**Component:** `internal/crypto/engine.go`
