@@ -36,7 +36,7 @@ func NewEngine(key []byte) (*Engine, error) {
 
 // Seal encrypts plaintext using envelope encryption.
 // Returns: ciphertext (encrypted data), encryptedDEK (wrapped key), nonce, error.
-func (engine *Engine) Seal(plaintext []byte) (ciphertext, encryptedDEK, nonce []byte, err error) {
+func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []byte, nonce []byte, err error) {
 	// Generate random Data Encryption Key
 	dek := make([]byte, KeySize)
 	if _, err := io.ReadFull(rand.Reader, dek); err != nil {
@@ -69,7 +69,7 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext, encryptedDEK, nonce []
 
 // Open decrypts ciphertext using envelope encryption.
 // Unwraps the DEK using the master key, then decrypts the ciphertext.
-func (engine *Engine) Open(ciphertext, encryptedDEK, nonce []byte) (plaintext []byte, err error) {
+func (engine *Engine) Open(ciphertext []byte, encryptedDEK []byte, nonce []byte) (plaintext []byte, err error) {
 
 	kekCipher, err := newGCM(engine.masterKey)
 	if err != nil {
