@@ -57,10 +57,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Start stack
+      - name: Generate throwaway secrets
         run: |
-          echo "SANCTUM_KEK=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-          echo "SANCTUM_API_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          kek=$(openssl rand -base64 32); token=$(openssl rand -hex 32)
+          echo "::add-mask::$kek"; echo "::add-mask::$token"
+          echo "SANCTUM_KEK=$kek" >> "$GITHUB_ENV"
+          echo "SANCTUM_API_TOKEN=$token" >> "$GITHUB_ENV"
       - run: docker compose up -d --build --wait db
       - run: docker compose up -d app
       - name: Create and read back a reflection
