@@ -290,3 +290,15 @@ func TestLogRequests_RecordsStatus(t *testing.T) {
 		t.Fatalf("log line = %q", logged.String())
 	}
 }
+
+func TestLogRequests_EscapesPath(t *testing.T) {
+	var logged strings.Builder
+	log.SetOutput(&logged)
+	defer log.SetOutput(os.Stderr)
+
+	h := LogRequests(http.NotFoundHandler())
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/v1/x%0A2026/01/01%20forged", nil))
+	if strings.Count(logged.String(), "\n") != 1 || !strings.Contains(logged.String(), "%0A") {
+		t.Fatalf("path not escaped in log: %q", logged.String())
+	}
+}

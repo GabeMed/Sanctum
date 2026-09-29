@@ -29,7 +29,7 @@ func Open(ctx context.Context, databaseURL string) (*sql.DB, error) {
 	conn.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := conn.PingContext(ctx); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return conn, nil

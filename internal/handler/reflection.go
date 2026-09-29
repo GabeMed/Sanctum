@@ -153,7 +153,9 @@ func toResponse(out domain.ReflectionOutput) reflectionResponse {
 
 // internalError logs the real error server-side and returns a generic 500.
 func internalError(w http.ResponseWriter, r *http.Request, err error) {
-	log.Printf("internal error on %s %s: %v", r.Method, r.URL.Path, err)
+	// EscapedPath keeps %0A etc. encoded, so a request cannot forge log lines.
+	// #nosec G706 -- path is escaped; net/http rejects methods that are not tokens
+	log.Printf("internal error on %s %s: %v", r.Method, r.URL.EscapedPath(), err)
 	writeError(w, http.StatusInternalServerError, "internal", "internal server error")
 }
 

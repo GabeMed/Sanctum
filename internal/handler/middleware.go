@@ -29,13 +29,15 @@ func RequireToken(token string) func(http.Handler) http.Handler {
 }
 
 // LogRequests logs method, path, status and duration of every request.
-// It never logs bodies or headers.
+// It never logs bodies, headers or query strings. The path is logged in its
+// escaped form so a request cannot inject newlines into the log.
 func LogRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, time.Since(start).Round(time.Microsecond))
+		// #nosec G706 -- path is escaped; net/http rejects methods that are not tokens
+		log.Printf("%s %s %d %s", r.Method, r.URL.EscapedPath(), rec.status, time.Since(start).Round(time.Microsecond))
 	})
 }
 

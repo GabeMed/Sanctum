@@ -65,6 +65,7 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// #nosec G407 -- nonce is filled from crypto/rand above, not hardcoded
 	ciphertext = dekCipher.Seal(nil, nonce, plaintext, nil)
 
 	// Wrap DEK with master key
@@ -72,6 +73,7 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// #nosec G407 -- same random nonce, different key (TD-001)
 	encryptedDEK = kekCipher.Seal(nil, nonce, dek, nil)
 
 	return ciphertext, encryptedDEK, nonce, nil
