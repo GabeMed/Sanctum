@@ -1,0 +1,7 @@
+.git
+.github
+bin
+docs
+tasks
+coverage.out
+*.md

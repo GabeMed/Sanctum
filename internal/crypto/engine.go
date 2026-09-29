@@ -5,7 +5,10 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
+
+	"github.com/GabeMed/Sanctum/internal/domain"
 )
 
 // Key and nonce size constants for AES-256-GCM
@@ -16,6 +19,9 @@ const (
 
 var (
 	ErrInvalidKeySize = errors.New("master key must be exactly 32 bytes (AES-256)")
+	// ErrMalformedEnvelope is returned by Open when the envelope cannot be a
+	// valid output of Seal (for example, a nonce of the wrong length).
+	ErrMalformedEnvelope = errors.New("malformed envelope")
 )
 
 // Engine provides envelope encryption using AES-256-GCM.
@@ -26,12 +32,15 @@ type Engine struct {
 }
 
 // NewEngine creates a new encryption engine with the provided master key.
-// The key must be exactly 32 bytes for AES-256.
+// The key must be exactly 32 bytes for AES-256. The key is copied, so the
+// caller may wipe its own slice afterwards.
 func NewEngine(key []byte) (*Engine, error) {
 	if len(key) != KeySize {
 		return nil, ErrInvalidKeySize
 	}
-	return &Engine{masterKey: key}, nil
+	masterKey := make([]byte, KeySize)
+	copy(masterKey, key)
+	return &Engine{masterKey: masterKey}, nil
 }
 
 // Seal encrypts plaintext using envelope encryption.
@@ -44,7 +53,8 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []
 	}
 	defer zeroBytes(dek) // Wipe DEK from memory when done
 
-	// Generate random nonce
+	// Generate random nonce. The same nonce is used under two different keys
+	// (the fresh DEK and the master key); see docs/TECH_DEBT.md, TD-001.
 	nonce = make([]byte, NonceSize)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, nil, nil, err
@@ -55,6 +65,7 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// #nosec G407 -- nonce is filled from crypto/rand above, not hardcoded
 	ciphertext = dekCipher.Seal(nil, nonce, plaintext, nil)
 
 	// Wrap DEK with master key
@@ -62,6 +73,7 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// #nosec G407 -- same random nonce, different key (TD-001)
 	encryptedDEK = kekCipher.Seal(nil, nonce, dek, nil)
 
 	return ciphertext, encryptedDEK, nonce, nil
@@ -69,7 +81,13 @@ func (engine *Engine) Seal(plaintext []byte) (ciphertext []byte, encryptedDEK []
 
 // Open decrypts ciphertext using envelope encryption.
 // Unwraps the DEK using the master key, then decrypts the ciphertext.
+// Any modification of ciphertext, encryptedDEK or nonce makes Open fail.
 func (engine *Engine) Open(ciphertext []byte, encryptedDEK []byte, nonce []byte) (plaintext []byte, err error) {
+	// cipher.AEAD.Open panics on a nonce of the wrong length, so a corrupted
+	// row must be rejected here instead of crashing the caller.
+	if len(nonce) != NonceSize {
+		return nil, fmt.Errorf("%w: nonce must be %d bytes, got %d", ErrMalformedEnvelope, NonceSize, len(nonce))
+	}
 
 	kekCipher, err := newGCM(engine.masterKey)
 	if err != nil {
@@ -79,7 +97,7 @@ func (engine *Engine) Open(ciphertext []byte, encryptedDEK []byte, nonce []byte)
 	// Decrypt DEK using the master key
 	dek, err := kekCipher.Open(nil, nonce, encryptedDEK, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unwrap DEK: %w", err)
 	}
 
 	defer zeroBytes(dek) // Wipe dek from memory when done
@@ -92,10 +110,32 @@ func (engine *Engine) Open(ciphertext []byte, encryptedDEK []byte, nonce []byte)
 	// Decrypt ciphertext with DEK
 	plaintext, err = dekCipher.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decrypt content: %w", err)
 	}
 
 	return plaintext, nil
+}
+
+// Encrypt seals plaintext and returns it as a domain.Envelope.
+// It lets *Engine satisfy the service.Encryptor interface.
+func (engine *Engine) Encrypt(plaintext []byte) (*domain.Envelope, error) {
+	ciphertext, encryptedDEK, nonce, err := engine.Seal(plaintext)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.Envelope{
+		Nonce:        nonce,
+		EncryptedDEK: encryptedDEK,
+		Ciphertext:   ciphertext,
+	}, nil
+}
+
+// Decrypt opens a domain.Envelope produced by Encrypt.
+func (engine *Engine) Decrypt(envelope *domain.Envelope) ([]byte, error) {
+	if envelope == nil {
+		return nil, ErrMalformedEnvelope
+	}
+	return engine.Open(envelope.Ciphertext, envelope.EncryptedDEK, envelope.Nonce)
 }
 
 // newGCM creates an AES-GCM cipher from the provided key.

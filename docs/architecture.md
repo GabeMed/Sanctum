@@ -68,7 +68,7 @@
              ▼                              ▼
 ┌────────────────────────────┐ ┌──────────────────────────────────┐
 │      ENCRYPTOR             │ │         REPOSITORY               │
-│   (internal/crypto)        │ │      (internal/storage)          │
+│   (internal/crypto)        │ │      (internal/db)               │
 │                            │ │                                  │
 │  Interface:                │ │  Interface:                      │
 │  ├── Encrypt(plaintext)    │ │  ├── Save(ctx, Reflection)       │
@@ -145,34 +145,36 @@
 ```
 sanctum/
 ├── cmd/
-│   └── sanctum/
+│   └── server/
 │       └── main.go              # Entry point. Wires everything.
 ├── internal/
 │   ├── config/
 │   │   └── config.go            # Reads env vars, builds Config struct
 │   ├── crypto/
 │   │   ├── engine.go            # AES-256-GCM envelope encryption [DONE]
-│   │   └── engine_test.go       # 100% coverage [DONE]
+│   │   └── engine_test.go       # Round trip, tamper, malformed input [DONE]
 │   ├── domain/
 │   │   └── reflection.go        # Reflection struct, Envelope struct
 │   ├── handler/
-│   │   ├── middleware.go         # Auth, logging, recovery, request ID
+│   │   ├── middleware.go         # Bearer-token auth, request logging
 │   │   ├── reflection.go        # HTTP handlers for /v1/reflections
 │   │   └── reflection_test.go
 │   ├── service/
 │   │   ├── interfaces.go        # Encryptor + Repository interfaces
 │   │   ├── reflection.go        # ReflectionService (the orchestrator)
 │   │   └── reflection_test.go
-│   └── storage/
-│       ├── postgres.go           # PostgresRepository implementation
-│       └── postgres_test.go
+│   └── db/
+│       ├── repository.go         # PostgresRepository implementation
+│       └── repository_test.go
 ├── migrations/
 │   ├── 000001_create_reflections.up.sql
-│   └── 000001_create_reflections.down.sql
+│   ├── 000001_create_reflections.down.sql
+│   └── migrations.go            # embeds the SQL into the binary
 ├── docs/
 │   ├── architecture.md           # This document
 │   ├── rfc.md                    # The RFC
-│   └── domain.md                 # Domain document
+│   ├── DOMAIN.md                 # Domain document
+│   └── TECH_DEBT.md              # Deferred decisions
 ├── docker-compose.yml
 ├── Dockerfile
 ├── Makefile
@@ -200,6 +202,7 @@ type Encryptor interface {
 type Repository interface {
     Save(ctx context.Context, r *domain.Reflection) error
     FindByDay(ctx context.Context, day time.Time) ([]domain.Reflection, error)
+    FindAll(ctx context.Context) ([]domain.Reflection, error) // GET without ?day
     FindByID(ctx context.Context, id uuid.UUID) (*domain.Reflection, error)
 }
 ```

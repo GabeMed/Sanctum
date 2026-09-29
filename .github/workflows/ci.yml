@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.26.x", "1.27.x"]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s --health-timeout 3s --health-retries 15
+    env:
+      SANCTUM_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: go vet
+        run: go vet ./...
+      - name: go test (unit + Postgres integration)
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - name: coverage
+        run: go tool cover -func=coverage.out | tail -1
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  docker:
+    name: docker compose smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate throwaway secrets
+        run: |
+          kek=$(openssl rand -base64 32); token=$(openssl rand -hex 32)
+          echo "::add-mask::$kek"; echo "::add-mask::$token"
+          echo "SANCTUM_KEK=$kek" >> "$GITHUB_ENV"
+          echo "SANCTUM_API_TOKEN=$token" >> "$GITHUB_ENV"
+      - run: docker compose up -d --build --wait db
+      - run: docker compose up -d app
+      - name: Create and read back a reflection
+        run: |
+          for i in $(seq 1 30); do curl -fsS localhost:8080/health && break; sleep 1; done
+          auth="Authorization: Bearer $SANCTUM_API_TOKEN"
+          id=$(curl -fsS -X POST localhost:8080/v1/reflections -H "$auth" \
+                 -d '{"content":"smoke test"}' | jq -r .id)
+          curl -fsS "localhost:8080/v1/reflections/$id" -H "$auth" | jq -e '.content == "smoke test"'
+          curl -fsS "localhost:8080/v1/reflections?day=$(date -u +%F)" -H "$auth" | jq -e '.count == 1'
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/v1/reflections)" = 401
+      - name: Ciphertext only in Postgres
+        run: |
+          docker compose exec -T db psql -U sanctum -d sanctum -Atc \
+            "SELECT count(*) || ' ' || count(*) FILTER (WHERE position(convert_to('smoke test', 'UTF8') IN nonce || encrypted_dek || ciphertext) > 0) FROM reflections" \
+            | tee /dev/stderr | grep -qx '1 0'
+      - name: Image size
+        run: docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep app
+      - name: Logs
+        if: always()
+        run: docker compose logs app
+      - if: always()
+        run: docker compose down -v
