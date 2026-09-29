@@ -91,3 +91,41 @@ If revisited, implement envelope format:
 **Status:** Accepted
 **Date:** 2026-03-01
 **Component:** `internal/crypto/engine.go`
+
+---
+
+## TD-004: Envelope is not bound to its row
+
+**Status:** Accepted
+**Date:** 2026-09-29
+**Component:** `internal/crypto/engine.go`, `internal/service/reflection.go`
+
+### Context
+
+`Seal()` passes no associated data (AAD) to AES-GCM. The GCM tags protect
+`nonce`, `encrypted_dek` and `ciphertext` against modification, but nothing
+ties an envelope to the row it is stored in.
+
+### Consequence
+
+Someone with write access to the database can copy a whole envelope into
+another row, or change a row's `day` / `created_at`, and decryption still
+succeeds. Deleting rows or restoring an old backup is also not detected.
+Reading the content still requires the KEK.
+
+### Decision
+
+**Keep for V1.** The RFC threat model targets database dumps and disk
+theft (read access), which this design covers. Write access to the
+database is closer to server compromise, which V1 does not defend against.
+
+### Revisit Trigger
+
+- [ ] The database is operated by someone other than the KEK holder
+- [ ] Opaque envelope format from TD-002 is introduced (natural place to add it)
+
+### Migration Path
+
+1. Pass `id || day` as AAD to both GCM calls (`Seal(nil, nonce, x, aad)`).
+2. Add a `version` byte (TD-002) so rows written without AAD stay readable.
+3. Re-seal old rows lazily on read, or in a one-off job.
